@@ -5,7 +5,7 @@
 #include <algorithm>
 
 #include "bitencryption.h"
-#include "common.hpp"
+#include "common.h"
 
 using namespace std;
 

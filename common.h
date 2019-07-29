@@ -17,8 +17,6 @@
 #include <helib/binaryArith.h>
 #include <helib/binaryCompare.h>
 
-#define _debug
-
 #ifdef _debug
 #define Log(X) (cerr << X << endl)
 #else

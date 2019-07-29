@@ -29,28 +29,39 @@ NTL=-lntl
 #LDLIBS = -L/usr/local/lib $(NTL) $(GMP) -lm -lboost_system
 SRCS = $(wildcard *.cpp)
 OBJS = $(SRCS:.cpp=.o)
-LIB_OBJ = $(addprefix ../src/,binaryArith.o binaryCompare.o NumbTh.o timing.o bluestein.o PAlgebra.o  CModulus.o FHEContext.o IndexSet.o DoubleCRT.o FHE.o KeySwitching.o Ctxt.o EncryptedArray.o replicate.o hypercube.o matching.o powerful.o BenesNetwork.o permutations.o PermNetwork.o OptimizePermutations.o eqtesting.o polyEval.o extractDigits.o EvalMap.o recryption.o debugging.o matmul.o intraSlot.o tableLookup.o binio.o)
+TARGETS = client_keygen work client_decrypt brokers_attack decode_server
+#LIB_OBJ = $(addprefix ../src/,binaryArith.o binaryCompare.o NumbTh.o timing.o bluestein.o PAlgebra.o  CModulus.o FHEContext.o IndexSet.o DoubleCRT.o FHE.o KeySwitching.o Ctxt.o EncryptedArray.o replicate.o hypercube.o matching.o powerful.o BenesNetwork.o permutations.o PermNetwork.o OptimizePermutations.o eqtesting.o polyEval.o extractDigits.o EvalMap.o recryption.o debugging.o matmul.o intraSlot.o tableLookup.o binio.o)
 
 LDLIBS = $(NTL) $(GMP) -lm -lboost_system -pthread  -lhelib
-LIBS = bitencryption.o 
-HEADER = operator.h common.hpp
+LIBS = bitencryption.o  operator.o
+HEADER = operator.h common.h
 
 %.o: %.cpp $(HEADER) 
-	$(CC) $(CFLAGS) -c $< -o $@
+	$(CC) $(CFLAGS) -D_debug -c $< -o $@
 
 
 
-all: $(OBJS)
-	$(MAKE) client_keygen_x
-	$(MAKE) server_x
-	$(MAKE) client_decrypt_x
-	$(MAKE) brokers_attack_x
+all: $(TARGETS)
 	export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/lib
 
 test:
 	$(MAKE) all
 	./tester.sh
 
+client_keygen: client_keygen.o $(LIBS)
+	$(CC) -o $@ $^ $(LDLIBS)
+
+work: work.o $(LIBS)
+	$(CC) -o $@ $^ $(LDLIBS)
+
+client_decrypt: client_decrypt.o $(LIBS)
+	$(CC) -o $@ $^ $(LDLIBS)
+
+brokers_attack: brokers_attack.o $(LIBS)
+	$(CC) -o $@ $^ $(LDLIBS)
+
+decode_server: decode_server.o $(LIBS)
+	$(CC) -o $@ $^ $(LDLIBS)
 #fhe.a: $(LIB_OBJ)
 	#$(AR) $(ARFLAGS) fhe.a $(LIB_OBJ)
 
@@ -72,5 +83,7 @@ DoubleCRT.o: DoubleCRT.cpp $(HEADER)
 clean:
 	rm -f *.o *_x *_x.exe core.*
 	rm -rf *.dSYM
+	rm -f *.bin
+	rm -f $(TARGETS)
 	rm -f *.bin
 

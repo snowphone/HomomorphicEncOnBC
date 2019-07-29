@@ -2,7 +2,7 @@
 #include <helib/FHE.h>
 #include <helib/EncryptedArray.h>
 #include "bitencryption.h"
-#include "common.hpp"
+#include "common.h"
 
 #include <fstream>
 using namespace std;

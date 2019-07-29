@@ -4,44 +4,65 @@
 #include <exception>
 #include <thread>
 #include <unistd.h>
+#include <thread>
 
 
 #include "bitencryption.h"
-#include "common.hpp"
+#include "common.h"
 
 using namespace std;
 using namespace NTL;
 using namespace boost::asio;
-static void initialize_decode_server();
-static bool DecodeBool(const Ctxt& cipher, const FHESecKey& key);
+
+static long mValues[][15] = { 
+// { p, phi(m),   m,   d, m1, m2, m3,    g1,   g2,   g3, ord1,ord2,ord3, B,c}
+  {  2,    48,   105, 12,  3, 35,  0,    71,    76,    0,   2,  2,   0, 25, 2},
+  {  2 ,  600,  1023, 10, 11, 93,  0,   838,   584,    0,  10,  6,   0, 25, 2},
+  {  2,  2304,  4641, 24,  7,  3,221,  3979,  3095, 3760,   6,  2,  -8, 25, 3},
+  {  2, 15004, 15709, 22, 23,683,  0,  4099, 13663,    0,  22, 31,   0, 25, 3},
+  {  2, 27000, 32767, 15, 31,  7, 151, 11628, 28087,25824, 30,  6, -10, 28, 4}
+};
 
 int main(int argc, const char* argv[]) 
 {
+	bool bBootstrap = true;
+	long* vals = mValues[0];
 
-
-	long m =0, p = 2, r = 1; // Native plaintext space
+	long m = vals[2], p = vals[0], r = 1; // Native plaintext space
 	// Computations will be 'modulo p'
-	long L = 15;			// Levels 
-	long c = 3;				// Columns in key switching matrix
-	long w = 80;			// Hamming weight of secret key
-	long d = 0;
-	long slb=0;				//Slots Lower Bound : minimum number of slots 
-	long security = 62;		// security parameter , number is directly proportional to the security.  
+	long L = bBootstrap ? 900 : 30 * (7 + NTL::NumBits(BITSIZE + 2));	// Levels 
+	long B = vals[13];
+	long c = vals[14];													// Columns in key switching matrix
 	/* Get a random number from whatever random source you have: /dev/random, 
 	   /dev/urandom, input by the user from the command line, or whatever*/
-	ZZ seed = to_ZZ(time(0));
+	ZZ seed = to_ZZ(time(nullptr));
 	NTL::SetSeed(seed);
 
-	m = FindM(security, L, c, p, d, slb, 0);
-	FHEcontext context(m, p, r);
-	buildModChain(context, L, c);
-	ZZX G = context.alMod.getFactorsOverZZ()[0];
+	NTL::Vec<long> mvec;
+	append(mvec, vals[4]);
+	if (vals[5]>1) append(mvec, vals[5]);
+	if (vals[6]>1) append(mvec, vals[6]);
+
+	std::vector<long> gens;
+	gens.push_back(vals[7]);
+	if (vals[8]>1) gens.push_back(vals[8]);
+	if (vals[9]>1) gens.push_back(vals[9]);
+
+	std::vector<long> ords;
+	ords.push_back(vals[10]);
+	if (abs(vals[11])>1) ords.push_back(vals[11]);
+	if (abs(vals[12])>1) ords.push_back(vals[12]);
+
+	FHEcontext context(m, p, r, gens, ords);
+	buildModChain(context, L, c, bBootstrap);
+
+	if(bBootstrap)
+		context.makeBootstrappable(mvec, /*t=*/0);
 
 	//key generation
 	FHESecKey secretKey(context);
 	const FHEPubKey& publicKey = secretKey;
-	secretKey.GenSecKey(w);
-	EncryptedArray ea(context, G);
+	secretKey.GenSecKey();
 
 	
 	//storing public key in file
@@ -75,94 +96,5 @@ int main(int argc, const char* argv[])
 	myfile2.open ("client_data.bin");
 	myfile2 << cipher;
 	myfile2.close();
-
-
-	//make decode process
-	pid_t pid = fork();
-	if(pid == 0)
-	{
-		initialize_decode_server();
-		return 0;
-	}
-
 }
 
-
-static void initialize_decode_server()
-{
-	boost::asio::io_service io_service;
-	ip::tcp::endpoint endpoint(ip::tcp::v4(), PORT_NUM);
-	ip::tcp::acceptor acceptor(io_service, endpoint);
-
-	ip::tcp::socket socket(io_service);
-	acceptor.accept(socket);
-
-	while(true)
-	{
-		vector<char> data, buf(4096);
-
-		boost::system::error_code err;
-		size_t len = 0;
-		do {
-			len = socket.read_some(buffer(buf), err);
-			copy(buf.begin(), buf.begin() + len, back_inserter(data));
-		} while(len == buf.size());
-
-
-
-		if(err)
-		{
-			if(err == error::eof)
-			{
-				cerr << "Decode Server: Connection Disconnected" << endl;
-			}
-			else
-			{
-				cerr << __func__ << '\t' << "line:  " << __LINE__ << endl
-					<< "error No: " << err.value() << endl
-					<< err.message() << endl;
-			}
-			break;
-		}
-
-		//reading context from the file
-		ifstream contextFile("Context.bin");
-		unique_ptr<FHEcontext> context = buildContextFromBinary(contextFile);
-		readContextBinary(contextFile, *context);
-		contextFile.close();
-
-		//reading secret key from the file
-		FHESecKey secretKey(*context);
-		ifstream secretFile;
-		secretFile.open("secret_key.bin");
-		readSecKeyBinary(secretFile, secretKey);
-		secretFile.close();
-
-
-		//reading public key from the secret key
-		FHESecKey publicKey(*context);
-		ifstream publicFile("public_key.bin");
-		readPubKeyBinary(publicFile, publicKey);
-		publicFile.close();
-
-		//reading Ctxt data
-		stringstream ss(string(data.begin(), data.end()));
-
-		Ctxt cipher(publicKey);
-		cipher.read(ss);
-
-		bool msg = DecodeBool(cipher, secretKey);
-
-		boost::system::error_code ignored_error;
-		socket.write_some(buffer(reinterpret_cast<char*>(&msg), sizeof(msg)), ignored_error);
-
-	}
-	cerr << "server is terminated" << endl;
-}
-
-static bool DecodeBool(const Ctxt& cipher, const FHESecKey& key)
-{
-	vector<long> buf;
-	key.getContext().ea->decrypt(cipher, key, buf);
-	return static_cast<bool>(buf.front());
-}

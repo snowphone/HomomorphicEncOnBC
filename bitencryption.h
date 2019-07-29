@@ -1,5 +1,5 @@
 #pragma once
-#include "common.hpp"
+#include "common.h"
 using std::vector;
 using std::istream;
 using std::ostream;
