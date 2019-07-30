@@ -3,8 +3,10 @@
 #include <string>
 #include <exception>
 #include <thread>
-#include <unistd.h>
 #include <chrono>
+#include <array>
+
+#include <unistd.h>
 
 
 #include "bitencryption.h"
@@ -14,45 +16,44 @@ using namespace std;
 using namespace NTL;
 using namespace boost::asio;
 
-static void initialize_decode_server();
-static bool DecodeBool(const Ctxt& cipher, const FHESecKey& key);
+using Sock_ptr = shared_ptr<ip::tcp::socket>;
+
+static bool decode_bool(const Ctxt& cipher, const FHESecKey& key);
+void process_sesseion(Sock_ptr socket_ptr) ;
 
 int main(int argc, const char* argv[]) 
 {
-    initialize_decode_server();
-}
-
-
-static void initialize_decode_server()
-{
-	boost::asio::io_service io_service;
+ 	boost::asio::io_service io_service;
 	ip::tcp::endpoint endpoint(ip::tcp::v4(), PORT_NUM);
 	ip::tcp::acceptor acceptor(io_service, endpoint);
 
-	ip::tcp::socket socket(io_service);
+	while (true) {
+		Sock_ptr socket_ptr = make_shared<ip::tcp::socket>(io_service);
+		acceptor.accept(*socket_ptr);
+		auto t1 = make_shared<thread>(process_sesseion, std::move(socket_ptr));
+		t1->detach();
+	}
+}
 
+void process_sesseion(Sock_ptr socket_ptr) {
 	while(true)
 	{
-		acceptor.accept(socket);
-
-		vector<char> data, buf(4096);
+		vector<char> data;
+		array<char, 4096> buf;
 
 		boost::system::error_code err;
 		size_t len = 0;
 		do {
-			len = socket.read_some(buffer(buf), err);
+			len = socket_ptr->read_some(boost::asio::buffer(buf), err);
 			copy(buf.begin(), buf.begin() + len, back_inserter(data));
 		} while(len == buf.size());
-
 
 
 		if(err)
 		{
 			if(err == error::eof) {
-				cerr << "Decode Server: Connection Disconnected" << endl;
-				continue;
-			}
-			else {
+				/* pass */
+			} else {
 				cerr << __func__ << '\t' << "line:  " << __LINE__ << endl
 					<< "error No: " << err.value() << endl
 					<< err.message() << endl;
@@ -86,16 +87,14 @@ static void initialize_decode_server()
 		Ctxt cipher(publicKey);
 		cipher.read(ss);
 
-		bool msg = DecodeBool(cipher, secretKey);
+		bool msg = decode_bool(cipher, secretKey);
 
 		boost::system::error_code ignored_error;
-		socket.write_some(buffer(reinterpret_cast<char*>(&msg), sizeof(msg)), ignored_error);
-
+		socket_ptr->write_some(buffer(reinterpret_cast<char*>(&msg), sizeof(msg)), ignored_error);
 	}
-	cerr << "server is terminated" << endl;
 }
 
-static bool DecodeBool(const Ctxt& cipher, const FHESecKey& key)
+static bool decode_bool(const Ctxt& cipher, const FHESecKey& key)
 {
 	vector<long> buf;
 	key.getContext().ea->decrypt(cipher, key, buf);
