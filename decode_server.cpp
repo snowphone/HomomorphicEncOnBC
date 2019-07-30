@@ -4,6 +4,7 @@
 #include <exception>
 #include <thread>
 #include <unistd.h>
+#include <chrono>
 
 
 #include "bitencryption.h"
@@ -29,10 +30,11 @@ static void initialize_decode_server()
 	ip::tcp::acceptor acceptor(io_service, endpoint);
 
 	ip::tcp::socket socket(io_service);
-	acceptor.accept(socket);
 
 	while(true)
 	{
+		acceptor.accept(socket);
+
 		vector<char> data, buf(4096);
 
 		boost::system::error_code err;
@@ -48,6 +50,7 @@ static void initialize_decode_server()
 		{
 			if(err == error::eof) {
 				cerr << "Decode Server: Connection Disconnected" << endl;
+				continue;
 			}
 			else {
 				cerr << __func__ << '\t' << "line:  " << __LINE__ << endl

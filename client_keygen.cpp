@@ -5,6 +5,7 @@
 #include <thread>
 #include <unistd.h>
 #include <thread>
+#include <chrono> 
 
 
 #include "bitencryption.h"
@@ -25,16 +26,20 @@ static long mValues[][15] = {
 
 int main(int argc, const char* argv[]) 
 {
+#ifdef BOOTSTRAP
 	bool bBootstrap = true;
-	long* vals = mValues[0];
+#else
+	bool bBootstrap = false;
+#endif
+
+	long* vals = mValues[1];
 
 	long m = vals[2], p = vals[0], r = 1; // Native plaintext space
 	// Computations will be 'modulo p'
 	long L = bBootstrap ? 900 : 30 * (7 + NTL::NumBits(BITSIZE + 2));	// Levels 
 	long B = vals[13];
 	long c = vals[14];													// Columns in key switching matrix
-	/* Get a random number from whatever random source you have: /dev/random, 
-	   /dev/urandom, input by the user from the command line, or whatever*/
+
 	ZZ seed = to_ZZ(time(nullptr));
 	NTL::SetSeed(seed);
 
@@ -52,6 +57,16 @@ int main(int argc, const char* argv[])
 	ords.push_back(vals[10]);
 	if (abs(vals[11])>1) ords.push_back(vals[11]);
 	if (abs(vals[12])>1) ords.push_back(vals[12]);
+
+#ifdef VERBOSE
+	printf("m, %ld, p, %ld, r, %ld, L, %ld, c, %ld\n", m, p, r, L, c);
+	cout << "gens," << mvec << endl
+		<< "ords, " << ords << endl
+		<< "Bootstrap, " << boolalpha << bBootstrap << endl;
+ #ifdef BOOTSTRAP
+	cout << "mvec, " << mvec << endl;
+ #endif
+#endif
 
 	FHEcontext context(m, p, r, gens, ords);
 	buildModChain(context, L, c, bBootstrap);
@@ -86,10 +101,18 @@ int main(int argc, const char* argv[])
 	myfile3.close();
 
 	//client data	
-	srand(time(0));
+	srand(time(nullptr));
 	long plain = rand() % (1ull << BITSIZE);
-	cout << "Encrypting " << plain << endl;
+	auto beg = chrono::system_clock::now();
 	vector<Ctxt> cipher = Encrypt_bitwise(plain, publicKey);
+	auto end = chrono::system_clock::now();
+#ifdef VERBOSE
+	auto time = chrono::duration_cast<chrono::milliseconds>(end - beg).count();
+	/*	bit size		plain text			encryption time */
+	cout << BITSIZE << ", " << plain << ", " << time << endl;
+#else
+	cout << "plain text " << plain << endl;
+#endif
 
 	//storing encrypted client data in file
 	ofstream myfile2;

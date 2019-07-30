@@ -1,7 +1,7 @@
 CC = g++
 #
 #CFLAGS = -g -O2 -std=c++11 -DDEBUG_PRINTOUT -Wfatal-errors -Wshadow -Wall -I/usr/local/include 
-CFLAGS = -g -O2 -std=c++14 -DFHE_THREADS -DFHE_BOOT_THREADS -fmax-errors=2
+CFLAGS = -g -O2 -std=c++14 -DFHE_THREADS -DFHE_BOOT_THREADS -fmax-errors=2 
 
 # useful flags:
 #   -std=c++11
@@ -37,12 +37,15 @@ LIBS = bitencryption.o  operator.o
 HEADER = operator.h common.h
 
 %.o: %.cpp $(HEADER) 
-	$(CC) $(CFLAGS) -D_debug -c $< -o $@
+	$(CC) $(CFLAGS) -c $< -o $@
 
 
 
 all: $(TARGETS)
 	export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/lib
+
+verbose: CFLAGS += -D VERBOSE
+verbose: $(TARGETS)
 
 test:
 	$(MAKE) all
@@ -62,8 +65,6 @@ brokers_attack: brokers_attack.o $(LIBS)
 
 decode_server: decode_server.o $(LIBS)
 	$(CC) -o $@ $^ $(LDLIBS)
-#fhe.a: $(LIB_OBJ)
-	#$(AR) $(ARFLAGS) fhe.a $(LIB_OBJ)
 
 #링크는 종속적 obj를 왼쪽에, 일반적인 obj를 오른쪽에 두자!
 ./%_x: %.o $(LIBS)

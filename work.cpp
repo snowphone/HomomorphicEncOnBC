@@ -3,6 +3,7 @@
 #include <cstdlib>
 #include <ctime>
 #include <thread>
+#include <chrono>
 
 
 #include <helib/FHE.h>
@@ -21,7 +22,11 @@ int main(int argc, const char* argv[]) {
 	long threadNum = thread::hardware_concurrency();
 	NTL::SetNumThreads(threadNum);
 
+#ifdef VERBOSE
+	cout << "Threads, " << threadNum << endl;
+#else
 	Log("Threads: " << threadNum );
+#endif
 	
 
 	// reading context from file
@@ -61,7 +66,15 @@ int main(int argc, const char* argv[]) {
 		plain = rand() % (1ull << BITSIZE);
 		vector<Ctxt> cipher2 = Encrypt_bitwise(plain, publicKey);
 
+		auto beg = chrono::system_clock::now();
+		bool ret = (cipher1 < cipher2);
+		auto end = chrono::system_clock::now();
+		auto time = chrono::duration_cast<chrono::milliseconds>(end - beg).count();
+#ifdef VERBOSE
+		cout << plain << ", " << boolalpha << ret << ", " << time << endl;
+#else
 		cout << "#" << (i + 1) << ": client's cipher < " << plain << " ? " << boolalpha << (cipher1 < cipher2) << endl;
+#endif
 	}
 
 
